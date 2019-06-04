@@ -571,3 +571,4 @@ lmt README.md WhitespacePreservation.md SubdirectoryFiles.md LineNumbers.md
  1. [Whitespace Preservation](WhitespacePreservation.md)
  2. [Subdirectory Files](SubdirectoryFiles.md)
  3. [Line Numbers](LineNumbers.md)
+ 4. [Expansion of Markup](MarkupExpansion.md)

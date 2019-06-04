@@ -33,6 +33,11 @@ type CodeLine struct {
 
 var blocks map[BlockName]CodeBlock
 var files map[File]CodeBlock
+//line MarkupExpansion.md:91
+type codefence struct {
+	char  string // This should probably be a rune for purity
+	count int
+}
 //line README.md:402
 var namedBlockRe *regexp.Regexp
 //line README.md:432
@@ -55,6 +60,8 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 	var bname BlockName
 	var fname File
 	var block CodeBlock
+//line MarkupExpansion.md:193
+	var fence codefence
 //line LineNumbers.md:99
 	for {
 		line.number++
@@ -67,62 +74,66 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 		default:
 			return err
 		}
-//line LineNumbers.md:145
-		if inBlock {
-			if line.text == "```\n" {
-//line LineNumbers.md:56
-				inBlock = false
-				// Update the files map if it's a file.
-				if fname != "" {
-					if appending {
-						files[fname] = append(files[fname], block...)
-					} else {
-						files[fname] = block
-					}
-				}
-
-				// Update the named block map if it's a named block.
-				if bname != "" {
-					if appending {
-						blocks[bname] = append(blocks[bname], block...)
-					} else {
-						blocks[bname] = block
-					}
-				}
-//line LineNumbers.md:148
-				continue
+//line MarkupExpansion.md:210
+		if !inBlock {
+//line MarkupExpansion.md:225
+			if len(line.text) >= 3 && (line.text[0:3] == "```" || line.text[0:3] == "~~~") {
+				inBlock = true
+				// We were outside of a block and now we are in one,
+				// so just blindly reset the block variable.
+				block = make(CodeBlock, 0)
+//line MarkupExpansion.md:187
+				fname, bname, appending, line.lang, fence = parseHeader(line.text)
+//line MarkupExpansion.md:231
 			}
-//line LineNumbers.md:48
-			block = append(block, line)
-//line LineNumbers.md:151
+//line MarkupExpansion.md:212
 			continue
 		}
-//line LineNumbers.md:170
-		if len(line.text) >= 3 && (line.text[0:3] == "```") {
-			inBlock = true
-			// We were outside of a block, so just blindly reset it.
-			block = make(CodeBlock, 0)
-//line LineNumbers.md:181
-			fname, bname, appending, line.lang = parseHeader(line.text)
-//line LineNumbers.md:175
+		if l := strings.TrimSpace(line.text); len(l) >= fence.count && strings.Replace(l, fence.char, "", -1) == "" {
+//line LineNumbers.md:56
+			inBlock = false
+			// Update the files map if it's a file.
+			if fname != "" {
+				if appending {
+					files[fname] = append(files[fname], block...)
+				} else {
+					files[fname] = block
+				}
+			}
+
+			// Update the named block map if it's a named block.
+			if bname != "" {
+				if appending {
+					blocks[bname] = append(blocks[bname], block...)
+				} else {
+					blocks[bname] = block
+				}
+			}
+//line MarkupExpansion.md:216
+			continue
 		}
+//line LineNumbers.md:48
+		block = append(block, line)
 //line LineNumbers.md:111
 	}
 //line LineNumbers.md:121
 }
-//line LineNumbers.md:190
-func parseHeader(line string) (File, BlockName, bool, language) {
-	line = strings.TrimSpace(line)
-//line LineNumbers.md:197
-	var matches []string
-	if matches = namedBlockRe.FindStringSubmatch(line); matches != nil {
-		return "", BlockName(matches[2]), (matches[3] == "+="), language(matches[1])
+//line MarkupExpansion.md:129
+func parseHeader(line string) (File, BlockName, bool, language, codefence) {
+	line = strings.TrimSpace(line) // remove indentation and trailing spaces
+
+	// lets iterate over the regexps we have.
+	for _, re := range []*regexp.Regexp{namedBlockRe, fileBlockRe} {
+		if m := namedMatchesfromRe(re, line); m != nil {
+			var fence codefence
+			fence.char = m["fence"][0:1]
+			fence.count = len(m["fence"])
+			return File(m["file"]), BlockName(m["name"]), (m["append"] == "+="), language(m["language"]), fence
+		}
 	}
-	if matches = fileBlockRe.FindStringSubmatch(line); matches != nil {
-		return File(matches[2]), "", (matches[3] == "+="), language(matches[1])
-	}
-	return "", "", false, ""
-//line LineNumbers.md:193
+
+	// An empty return value for unnamed or broken fences to codeblocks.
+	return "", "", false, "", codefence{}
 }
 //line WhitespacePreservation.md:34
 // Replace expands all macros in a CodeBlock and returns a CodeBlock with no
@@ -185,6 +196,28 @@ func (block CodeBlock) Finalize() (ret string) {
 	}
 	return
 }
+//line MarkupExpansion.md:155
+
+// namedMatchesfromRe takes an regexp and a string to match and returns a map
+// of named groups to the matches. If not matches are found it returns nil.
+func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]string) {
+	substrings := re.FindStringSubmatch(toMatch)
+	if substrings == nil {
+		return nil
+	}
+
+	ret = make(map[string]string)
+	names := re.SubexpNames()
+
+	for i, s := range substrings {
+		ret[names[i]] = s
+	}
+	// The names[0] and names[x] from unnamed regex grous are an empty string.
+	// Instead of checking every names[x] we simply overwrite the previous
+	// ret[""] and discard it at the end.
+	delete(ret, "")
+	return
+}
 //line README.md:74
 
 func main() {
@@ -192,12 +225,12 @@ func main() {
 	// Initialize the maps
 	blocks = make(map[BlockName]CodeBlock)
 	files = make(map[File]CodeBlock)
-//line LineNumbers.md:208
-	namedBlockRe = regexp.MustCompile("^`{3,}\\s?(\\w*)\\s*\"(.+)\"\\s*([+][=])?$")
-//line LineNumbers.md:212
-	fileBlockRe = regexp.MustCompile("^`{3,}\\s?(\\w+)\\s+([\\w\\.\\-\\/]+)\\s*([+][=])?$")
-//line WhitespacePreservation.md:11
-	replaceRe = regexp.MustCompile(`^([\s]*)<<<(.+)>>>[\s]*$`)
+//line MarkupExpansion.md:104
+	namedBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w*)\\s*\"(?P<name>.+)\"\\s*(?P<append>[+][=])?$")
+//line MarkupExpansion.md:113
+	fileBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w+)\\s+(?P<file>[\\w\\.\\-\\/]+)\\s*(?P<append>[+][=])?$")
+//line MarkupExpansion.md:83
+	replaceRe = regexp.MustCompile(`^(?P<prefix>\s*)(?:<<|//)<(?P<name>.+)>>>\s*$`)
 //line README.md:136
 
 	// os.Args[0] is the command name, "lmt". We don't want to process it.
