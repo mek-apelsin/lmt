@@ -14,6 +14,8 @@ import (
 	"strings"
 //line SubdirectoryFiles.md:35
 	"path/filepath"
+//line Flags.md:11
+	"flag"
 //line README.md:69
 )
 
@@ -37,6 +39,13 @@ var files map[File]CodeBlock
 type codefence struct {
 	char  string // This should probably be a rune for purity
 	count int
+}
+//line Flags.md:19
+var flags struct {
+//line Flags.md:29
+	outfile     string
+	publishable bool
+//line Flags.md:21
 }
 //line README.md:402
 var namedBlockRe *regexp.Regexp
@@ -165,7 +174,7 @@ func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
 	return
 //line WhitespacePreservation.md:38
 }
-//line LineNumbers.md:277
+//line Flags.md:84
 
 // Finalize reads the textual lines from CodeBlocks and (if needed) prepend a
 // notice about "unexpected" filename or line changes, which is extracted from
@@ -176,7 +185,7 @@ func (block CodeBlock) Finalize() (ret string) {
 	var formatstring string
 
 	for _, current := range block {
-		if prev.number+1 != current.number || prev.file != current.file {
+		if !flags.publishable && (prev.number+1 != current.number || prev.file != current.file) {
 			switch current.lang {
 //line LineNumbers.md:306
 			case "bash", "shell", "sh", "perl":
@@ -185,7 +194,7 @@ func (block CodeBlock) Finalize() (ret string) {
 				formatstring = "//line %[2]v:%[1]v\n"
 			case "C", "c":
 				formatstring = "#line %v \"%v\"\n"
-//line LineNumbers.md:290
+//line Flags.md:97
 			}
 			if formatstring != "" {
 				ret += fmt.Sprintf(formatstring, current.number, current.file)
@@ -221,6 +230,8 @@ func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]strin
 //line README.md:74
 
 func main() {
+//line Flags.md:50
+
 //line README.md:157
 	// Initialize the maps
 	blocks = make(map[BlockName]CodeBlock)
@@ -231,10 +242,13 @@ func main() {
 	fileBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w+)\\s+(?P<file>[\\w\\.\\-\\/]+)\\s*(?P<append>[+][=])?$")
 //line MarkupExpansion.md:83
 	replaceRe = regexp.MustCompile(`^(?P<prefix>\s*)(?:<<|//)<(?P<name>.+)>>>\s*$`)
-//line README.md:136
+//line Flags.md:38
+	flag.StringVar(&flags.outfile, "o", "", "output a specific file instead of all files.")
+	flag.BoolVar(&flags.publishable, "p", false, "publishable output, without line directives.")
+//line Flags.md:52
+	flag.Parse()
 
-	// os.Args[0] is the command name, "lmt". We don't want to process it.
-	for _, file := range os.Args[1:] {
+	for _, file := range flag.Args() {
 //line LineNumbers.md:127
 		f, err := os.Open(file)
 		if err != nil {
@@ -248,8 +262,17 @@ func main() {
 		// Don't defer since we're in a loop, we don't want to wait until the function
 		// exits.
 		f.Close()
-//line README.md:140
-
+//line Flags.md:56
+	}
+//line Flags.md:69
+	if flags.outfile != "" {
+		f := make(map[File]CodeBlock)
+		if files[File(flags.outfile)] != nil {
+			f[File(flags.outfile)] = files[File(flags.outfile)]
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: File named \"%s\" requested but not defined.\n", flags.outfile)
+		}
+		files = f
 	}
 //line LineNumbers.md:318
 	for filename, codeblock := range files {
