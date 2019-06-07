@@ -16,6 +16,8 @@ import (
 	"strings"
 	"path/filepath"
 	"flag"
+	"sort"
+	"errors"
 )
 
 type File string
@@ -38,6 +40,10 @@ type codefence struct {
 var flags struct {
 	outfile     string
 	publishable bool
+	concatenate string
+	extract     string
+	listblocks  bool
+	listfiles   bool
 }
 var namedBlockRe *regexp.Regexp
 var fileBlockRe *regexp.Regexp
@@ -191,6 +197,20 @@ func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]strin
 	return
 }
 
+// getBlockByName takes a string as a name and use it as a key in files and
+// blocks and return the first codeblock it could find. If no codeblocks are
+// found by that name getBlockByName returns an error.
+func getBlockByName(bn string) (CodeBlock, error) {
+	// TODO: Why not make files a simple list and store all codeblocks in blocks?
+	if _, filesiscb := files[File(bn)]; filesiscb {
+		return files[File(bn)], nil
+	}
+	if _, blockiscb := blocks[BlockName(bn)]; blockiscb {
+		return blocks[BlockName(bn)], nil
+	}
+	return nil, errors.New("No CodeBlock by that name")
+}
+
 func main() {
 
 	// Initialize the maps
@@ -201,6 +221,10 @@ func main() {
 	replaceRe = regexp.MustCompile(`^(?P<prefix>\s*)(?:<<|//)<(?P<name>.+)>>>\s*$`)
 	flag.StringVar(&flags.outfile, "o", "", "output a specific file instead of all files.")
 	flag.BoolVar(&flags.publishable, "p", false, "publishable output, without line directives.")
+	flag.StringVar(&flags.concatenate, "c", "", "Concatenate a codeblock and print to standard out.")
+	flag.StringVar(&flags.extract, "e", "", "Extract, expand a codeblock and print to standard out.")
+	flag.BoolVar(&flags.listblocks, "l", false, "List all codeblocks.")
+	flag.BoolVar(&flags.listfiles, "f", false, "List all output files.")
 	flag.Parse()
 
 	for _, file := range flag.Args() {
@@ -226,20 +250,53 @@ func main() {
 		}
 		files = f
 	}
-	for filename, codeblock := range files {
-		if dir := filepath.Dir(string(filename)); dir != "." {
-			if err := os.MkdirAll(dir, 0775); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
+	switch {
+	case flags.listfiles:
+		fn := make([]string, 0, len(files))
+		for n := range files {
+			fn = append(fn, string(n))
+		}
+		sort.Strings(fn)
+		fmt.Println(strings.Join(fn, "\n"))
+	case flags.listblocks:
+		bn := make([]string, 0, len(blocks))
+		for n := range blocks {
+			bn = append(bn, string(n))
+		}
+		sort.Strings(bn)
+		fmt.Println(strings.Join(bn, "\n"))
+	case flags.concatenate != "", flags.extract != "":
+		for i, v := range map[rune]string{'c': flags.concatenate, 'e': flags.extract} {
+			if v != "" {
+				cb, err := getBlockByName(v)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Block named \"%s\" requested but not defined.\n", v)
+					return
+				}
+				switch i {
+				case 'c':
+					fmt.Fprintf(os.Stdout, "%s", cb.Finalize())
+				case 'e':
+					fmt.Fprintf(os.Stdout, "%s", cb.Replace("").Finalize())
+				}
 			}
 		}
+	default:
+		for filename, codeblock := range files {
+			if dir := filepath.Dir(string(filename)); dir != "." {
+				if err := os.MkdirAll(dir, 0775); err != nil {
+					fmt.Fprintf(os.Stderr, "%v\n", err)
+				}
+			}
 
-		f, err := os.Create(string(filename))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			continue
+			f, err := os.Create(string(filename))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				continue
+			}
+			fmt.Fprintf(f, "%s", codeblock.Replace("").Finalize())
+			// We don't defer this so that it'll get closed before the loop finishes.
+			f.Close()
 		}
-		fmt.Fprintf(f, "%s", codeblock.Replace("").Finalize())
-		// We don't defer this so that it'll get closed before the loop finishes.
-		f.Close()
 	}
 }

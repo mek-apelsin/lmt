@@ -22,6 +22,9 @@ import (
 	"path/filepath"
 //line addons/005_Flags.md:11
 	"flag"
+//line addons/007_Extract.md:137
+	"sort"
+	"errors"
 //line addons/006_GoGenerate.md:58
 )
 
@@ -51,6 +54,11 @@ var flags struct {
 //line addons/005_Flags.md:29
 	outfile     string
 	publishable bool
+//line addons/007_Extract.md:19
+	concatenate string
+	extract     string
+	listblocks  bool
+	listfiles   bool
 //line addons/005_Flags.md:21
 }
 //line README.md:402
@@ -233,10 +241,25 @@ func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]strin
 	delete(ret, "")
 	return
 }
+//line addons/007_Extract.md:84
+
+// getBlockByName takes a string as a name and use it as a key in files and
+// blocks and return the first codeblock it could find. If no codeblocks are
+// found by that name getBlockByName returns an error.
+func getBlockByName(bn string) (CodeBlock, error) {
+	// TODO: Why not make files a simple list and store all codeblocks in blocks?
+	if _, filesiscb := files[File(bn)]; filesiscb {
+		return files[File(bn)], nil
+	}
+	if _, blockiscb := blocks[BlockName(bn)]; blockiscb {
+		return blocks[BlockName(bn)], nil
+	}
+	return nil, errors.New("No CodeBlock by that name")
+}
 //line addons/006_GoGenerate.md:63
 
 func main() {
-//line addons/005_Flags.md:50
+//line addons/007_Extract.md:31
 
 //line README.md:157
 	// Initialize the maps
@@ -251,7 +274,12 @@ func main() {
 //line addons/005_Flags.md:38
 	flag.StringVar(&flags.outfile, "o", "", "output a specific file instead of all files.")
 	flag.BoolVar(&flags.publishable, "p", false, "publishable output, without line directives.")
-//line addons/005_Flags.md:52
+//line addons/007_Extract.md:10
+	flag.StringVar(&flags.concatenate, "c", "", "Concatenate a codeblock and print to standard out.")
+	flag.StringVar(&flags.extract, "e", "", "Extract, expand a codeblock and print to standard out.")
+	flag.BoolVar(&flags.listblocks, "l", false, "List all codeblocks.")
+	flag.BoolVar(&flags.listfiles, "f", false, "List all output files.")
+//line addons/007_Extract.md:33
 	flag.Parse()
 
 	for _, file := range flag.Args() {
@@ -268,7 +296,7 @@ func main() {
 		// Don't defer since we're in a loop, we don't want to wait until the function
 		// exits.
 		f.Close()
-//line addons/005_Flags.md:56
+//line addons/007_Extract.md:37
 	}
 //line addons/005_Flags.md:69
 	if flags.outfile != "" {
@@ -280,22 +308,61 @@ func main() {
 		}
 		files = f
 	}
-//line addons/003_LineNumbers.md:318
-	for filename, codeblock := range files {
-		if dir := filepath.Dir(string(filename)); dir != "." {
-			if err := os.MkdirAll(dir, 0775); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
+//line addons/007_Extract.md:39
+	switch {
+//line addons/007_Extract.md:124
+	case flags.listfiles:
+		fn := make([]string, 0, len(files))
+		for n := range files {
+			fn = append(fn, string(n))
+		}
+		sort.Strings(fn)
+		fmt.Println(strings.Join(fn, "\n"))
+//line addons/007_Extract.md:114
+	case flags.listblocks:
+		bn := make([]string, 0, len(blocks))
+		for n := range blocks {
+			bn = append(bn, string(n))
+		}
+		sort.Strings(bn)
+		fmt.Println(strings.Join(bn, "\n"))
+//line addons/007_Extract.md:61
+	case flags.concatenate != "", flags.extract != "":
+		for i, v := range map[rune]string{'c': flags.concatenate, 'e': flags.extract} {
+			if v != "" {
+				cb, err := getBlockByName(v)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Block named \"%s\" requested but not defined.\n", v)
+					return
+				}
+				switch i {
+				case 'c':
+					fmt.Fprintf(os.Stdout, "%s", cb.Finalize())
+				case 'e':
+					fmt.Fprintf(os.Stdout, "%s", cb.Replace("").Finalize())
+				}
 			}
 		}
+//line addons/007_Extract.md:41
+	default:
+//line addons/003_LineNumbers.md:318
+		for filename, codeblock := range files {
+			if dir := filepath.Dir(string(filename)); dir != "." {
+				if err := os.MkdirAll(dir, 0775); err != nil {
+					fmt.Fprintf(os.Stderr, "%v\n", err)
+				}
+			}
 
-		f, err := os.Create(string(filename))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			continue
+			f, err := os.Create(string(filename))
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				continue
+			}
+			fmt.Fprintf(f, "%s", codeblock.Replace("").Finalize())
+			// We don't defer this so that it'll get closed before the loop finishes.
+			f.Close()
 		}
-		fmt.Fprintf(f, "%s", codeblock.Replace("").Finalize())
-		// We don't defer this so that it'll get closed before the loop finishes.
-		f.Close()
+//line addons/007_Extract.md:43
 	}
 //line addons/006_GoGenerate.md:66
 }
