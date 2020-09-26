@@ -12,40 +12,40 @@ import (
 	"regexp"
 //line README.md:510
 	"strings"
-//line SubdirectoryFiles.md:35
+//line addons/002_SubdirectoryFiles.md:35
 	"path/filepath"
-//line Flags.md:11
+//line addons/005_Flags.md:11
 	"flag"
 //line README.md:69
 )
 
-//line LineNumbers.md:25
+//line addons/003_LineNumbers.md:25
 type File string
 type CodeBlock []CodeLine
 type BlockName string
 type language string
-//line LineNumbers.md:36
+//line addons/003_LineNumbers.md:36
 type CodeLine struct {
 	text   string
 	file   File
 	lang   language
 	number int
 }
-//line LineNumbers.md:30
+//line addons/003_LineNumbers.md:30
 
 var blocks map[BlockName]CodeBlock
 var files map[File]CodeBlock
-//line MarkupExpansion.md:91
+//line addons/004_MarkupExpansion.md:91
 type codefence struct {
 	char  string // This should probably be a rune for purity
 	count int
 }
-//line Flags.md:19
+//line addons/005_Flags.md:19
 var flags struct {
-//line Flags.md:29
+//line addons/005_Flags.md:29
 	outfile     string
 	publishable bool
-//line Flags.md:21
+//line addons/005_Flags.md:21
 }
 //line README.md:402
 var namedBlockRe *regexp.Regexp
@@ -55,10 +55,10 @@ var fileBlockRe *regexp.Regexp
 var replaceRe *regexp.Regexp
 //line README.md:72
 
-//line LineNumbers.md:118
+//line addons/003_LineNumbers.md:118
 // Updates the blocks and files map for the markdown read from r.
 func ProcessFile(r io.Reader, inputfilename string) error {
-//line LineNumbers.md:82
+//line addons/003_LineNumbers.md:82
 	scanner := bufio.NewReader(r)
 	var err error
 
@@ -69,9 +69,9 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 	var bname BlockName
 	var fname File
 	var block CodeBlock
-//line MarkupExpansion.md:193
+//line addons/004_MarkupExpansion.md:193
 	var fence codefence
-//line LineNumbers.md:99
+//line addons/003_LineNumbers.md:99
 	for {
 		line.number++
 		line.text, err = scanner.ReadString('\n')
@@ -83,23 +83,23 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 		default:
 			return err
 		}
-//line MarkupExpansion.md:210
+//line addons/004_MarkupExpansion.md:210
 		if !inBlock {
-//line MarkupExpansion.md:225
+//line addons/004_MarkupExpansion.md:225
 			if len(line.text) >= 3 && (line.text[0:3] == "```" || line.text[0:3] == "~~~") {
 				inBlock = true
 				// We were outside of a block and now we are in one,
 				// so just blindly reset the block variable.
 				block = make(CodeBlock, 0)
-//line MarkupExpansion.md:187
+//line addons/004_MarkupExpansion.md:187
 				fname, bname, appending, line.lang, fence = parseHeader(line.text)
-//line MarkupExpansion.md:231
+//line addons/004_MarkupExpansion.md:231
 			}
-//line MarkupExpansion.md:212
+//line addons/004_MarkupExpansion.md:212
 			continue
 		}
 		if l := strings.TrimSpace(line.text); len(l) >= fence.count && strings.Replace(l, fence.char, "", -1) == "" {
-//line LineNumbers.md:56
+//line addons/003_LineNumbers.md:56
 			inBlock = false
 			// Update the files map if it's a file.
 			if fname != "" {
@@ -118,16 +118,16 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 					blocks[bname] = block
 				}
 			}
-//line MarkupExpansion.md:216
+//line addons/004_MarkupExpansion.md:216
 			continue
 		}
-//line LineNumbers.md:48
+//line addons/003_LineNumbers.md:48
 		block = append(block, line)
-//line LineNumbers.md:111
+//line addons/003_LineNumbers.md:111
 	}
-//line LineNumbers.md:121
+//line addons/003_LineNumbers.md:121
 }
-//line MarkupExpansion.md:129
+//line addons/004_MarkupExpansion.md:129
 func parseHeader(line string) (File, BlockName, bool, language, codefence) {
 	line = strings.TrimSpace(line) // remove indentation and trailing spaces
 
@@ -144,15 +144,15 @@ func parseHeader(line string) (File, BlockName, bool, language, codefence) {
 	// An empty return value for unnamed or broken fences to codeblocks.
 	return "", "", false, "", codefence{}
 }
-//line WhitespacePreservation.md:34
+//line addons/001_WhitespacePreservation.md:34
 // Replace expands all macros in a CodeBlock and returns a CodeBlock with no
 // references to macros.
 func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
-//line LineNumbers.md:251
+//line addons/003_LineNumbers.md:251
 	var line string
 	for _, v := range c {
 		line = v.text
-//line LineNumbers.md:234
+//line addons/003_LineNumbers.md:234
 		matches := replaceRe.FindStringSubmatch(line)
 		if matches == nil {
 			if v.text != "\n" {
@@ -161,7 +161,7 @@ func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
 			ret = append(ret, v)
 			continue
 		}
-//line LineNumbers.md:220
+//line addons/003_LineNumbers.md:220
 		bname := BlockName(matches[2])
 		if val, ok := blocks[bname]; ok {
 			ret = append(ret, val.Replace(prefix+matches[1])...)
@@ -169,12 +169,12 @@ func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
 			fmt.Fprintf(os.Stderr, "Warning: Block named %s referenced but not defined.\n", bname)
 			ret = append(ret, v)
 		}
-//line LineNumbers.md:255
+//line addons/003_LineNumbers.md:255
 	}
 	return
-//line WhitespacePreservation.md:38
+//line addons/001_WhitespacePreservation.md:38
 }
-//line Flags.md:84
+//line addons/005_Flags.md:84
 
 // Finalize reads the textual lines from CodeBlocks and (if needed) prepend a
 // notice about "unexpected" filename or line changes, which is extracted from
@@ -187,14 +187,14 @@ func (block CodeBlock) Finalize() (ret string) {
 	for _, current := range block {
 		if !flags.publishable && (prev.number+1 != current.number || prev.file != current.file) {
 			switch current.lang {
-//line LineNumbers.md:306
+//line addons/003_LineNumbers.md:306
 			case "bash", "shell", "sh", "perl":
 				formatstring = "#line %v \"%v\"\n"
 			case "go", "golang":
 				formatstring = "//line %[2]v:%[1]v\n"
 			case "C", "c":
 				formatstring = "#line %v \"%v\"\n"
-//line Flags.md:97
+//line addons/005_Flags.md:97
 			}
 			if formatstring != "" {
 				ret += fmt.Sprintf(formatstring, current.number, current.file)
@@ -205,7 +205,7 @@ func (block CodeBlock) Finalize() (ret string) {
 	}
 	return
 }
-//line MarkupExpansion.md:155
+//line addons/004_MarkupExpansion.md:155
 
 // namedMatchesfromRe takes an regexp and a string to match and returns a map
 // of named groups to the matches. If not matches are found it returns nil.
@@ -230,26 +230,26 @@ func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]strin
 //line README.md:74
 
 func main() {
-//line Flags.md:50
+//line addons/005_Flags.md:50
 
 //line README.md:157
 	// Initialize the maps
 	blocks = make(map[BlockName]CodeBlock)
 	files = make(map[File]CodeBlock)
-//line MarkupExpansion.md:104
+//line addons/004_MarkupExpansion.md:104
 	namedBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w*)\\s*\"(?P<name>.+)\"\\s*(?P<append>[+][=])?$")
-//line MarkupExpansion.md:113
+//line addons/004_MarkupExpansion.md:113
 	fileBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w+)\\s+(?P<file>[\\w\\.\\-\\/]+)\\s*(?P<append>[+][=])?$")
-//line MarkupExpansion.md:83
+//line addons/004_MarkupExpansion.md:83
 	replaceRe = regexp.MustCompile(`^(?P<prefix>\s*)(?:<<|//)<(?P<name>.+)>>>\s*$`)
-//line Flags.md:38
+//line addons/005_Flags.md:38
 	flag.StringVar(&flags.outfile, "o", "", "output a specific file instead of all files.")
 	flag.BoolVar(&flags.publishable, "p", false, "publishable output, without line directives.")
-//line Flags.md:52
+//line addons/005_Flags.md:52
 	flag.Parse()
 
 	for _, file := range flag.Args() {
-//line LineNumbers.md:127
+//line addons/003_LineNumbers.md:127
 		f, err := os.Open(file)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error: ", err)
@@ -262,9 +262,9 @@ func main() {
 		// Don't defer since we're in a loop, we don't want to wait until the function
 		// exits.
 		f.Close()
-//line Flags.md:56
+//line addons/005_Flags.md:56
 	}
-//line Flags.md:69
+//line addons/005_Flags.md:69
 	if flags.outfile != "" {
 		f := make(map[File]CodeBlock)
 		if files[File(flags.outfile)] != nil {
@@ -274,7 +274,7 @@ func main() {
 		}
 		files = f
 	}
-//line LineNumbers.md:318
+//line addons/003_LineNumbers.md:318
 	for filename, codeblock := range files {
 		if dir := filepath.Dir(string(filename)); dir != "." {
 			if err := os.MkdirAll(dir, 0775); err != nil {

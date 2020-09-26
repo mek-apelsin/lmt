@@ -568,8 +568,8 @@ lmt README.md WhitespacePreservation.md SubdirectoryFiles.md LineNumbers.md
 
 ## Patches
 
- 1. [Whitespace Preservation](WhitespacePreservation.md)
- 2. [Subdirectory Files](SubdirectoryFiles.md)
- 3. [Line Numbers](LineNumbers.md)
- 4. [Expansion of Markup](MarkupExpansion.md)
- 5. [Cli Flags](Flags.md)
+ 1. [Whitespace Preservation](addons/001_WhitespacePreservation.md)
+ 2. [Subdirectory Files](addons/002_SubdirectoryFiles.md)
+ 3. [Line Numbers](addons/003_LineNumbers.md)
+ 4. [Expansion of Markup](addons/004_MarkupExpansion.md)
+ 5. [Cli Flags](addons/005_Flags.md)
