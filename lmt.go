@@ -29,6 +29,7 @@ type CodeLine struct {
 	file   File
 	lang   language
 	number int
+	macro  BlockName
 }
 
 var blocks map[BlockName]CodeBlock
@@ -46,6 +47,7 @@ var flags struct {
 	extract     string
 	listblocks  bool
 	listfiles   bool
+	macro       bool
 }
 var namedBlockRe *regexp.Regexp
 var fileBlockRe *regexp.Regexp
@@ -82,6 +84,12 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 				// so just blindly reset the block variable.
 				block = make(CodeBlock, 0)
 				fname, bname, appending, line.lang, fence = parseHeader(line.text)
+				if fname != "" {
+					line.macro = BlockName(fname)
+				}
+				if bname != "" {
+					line.macro = BlockName(fmt.Sprintf(`"%v"`, bname))
+				}
 			}
 			continue
 		}
@@ -151,26 +159,36 @@ func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
 	return
 }
 
-// Finalize reads the textual lines from CodeBlocks and (if needed) prepend a
+// Finalize extract the textual lines from CodeBlocks and (if needed) prepend a
 // notice about "unexpected" filename or line changes, which is extracted from
 // the contained CodeLines. The result is a string with newlines ready to be
 // pasted into a file.
 func (block CodeBlock) Finalize() (ret string) {
 	var prev CodeLine
-	var formatstring string
+	var lineformatstring string
+	var macroformatstring string
 
 	for _, current := range block {
 		if !flags.publishable && (prev.number+1 != current.number || prev.file != current.file) {
 			switch current.lang {
-			case "bash", "shell", "sh", "perl":
-				formatstring = "\n#line %v \"%v\"\n"
+			case "bash", "shell", "sh", "zsh", "python", "perl":
+				macroformatstring = "# <<< %v >>>\n"
+				lineformatstring = "\n#line %v \"%v\"\n"
 			case "go", "golang":
-				formatstring = "\n//line %[2]v:%[1]v\n"
+				macroformatstring = "//// <<< %v >>>\n"
+				lineformatstring = "\n//line %[2]v:%[1]v\n"
+			case "CPP", "cpp", "Cpp":
+				macroformatstring = "// <<< %v >>>\n"
+				lineformatstring = "\n#line %v \"%v\"\n"
 			case "C", "c":
-				formatstring = "\n#line %v \"%v\"\n"
+				// No surefire way to make line comments in c, we might be in a comment block already.
+				lineformatstring = "\n#line %v \"%v\"\n"
 			}
-			if formatstring != "" {
-				ret += fmt.Sprintf(formatstring, current.number, current.file)
+			if flags.macro && macroformatstring != "" && prev.macro != current.macro {
+				ret += fmt.Sprintf(macroformatstring, current.macro)
+			}
+			if lineformatstring != "" {
+				ret += fmt.Sprintf(lineformatstring, current.number, current.file)
 			}
 		}
 		ret += current.text
@@ -232,6 +250,7 @@ func main() {
 	flag.StringVar(&flags.extract, "e", "", "Extract, expand a codeblock and print to standard out.")
 	flag.BoolVar(&flags.listblocks, "l", false, "List all codeblocks.")
 	flag.BoolVar(&flags.listfiles, "f", false, "List all output files.")
+	flag.BoolVar(&flags.macro, "m", false, "macro names added in comments")
 	flag.Parse()
 
 	for _, file := range flag.Args() {

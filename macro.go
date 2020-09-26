@@ -1,15 +1,18 @@
+//// <<< macro.go >>>
 
-//line addons/006_GoGenerate.md:29
+//line addons/008_MacroNames.md:106
 // Code generated with lmt DO NOT EDIT.
-//go:generate sh -c "go run main.go -o $GOFILE README.md addons/*.md && echo run '`go build -o lmt main.go`' to produce a binary."
+//go:generate sh -c "go run main.go -m -o $GOFILE README.md addons/*.md && go fmt $GOFILE && echo please use main.go to produce a binary."
 // This file is full of line directives, they are very useful when compiling and/or in user reports.
 // If you are unconfortable with them, please look in lmt.go in the same directory.
 
+//// <<< "main code" >>>
 
 //line addons/006_GoGenerate.md:55
 package main
 
 import (
+	//// <<< "main.go imports" >>>
 
 //line README.md:149
 	"fmt"
@@ -34,16 +37,19 @@ import (
 //line addons/007_Extract.md:137
 	"errors"
 	"sort"
-
-//line addons/006_GoGenerate.md:59
+	//// <<< "main code" >>>
+	//line addons/006_GoGenerate.md:59
 )
 
+//// <<< "global block variables" >>>
 
 //line addons/003_LineNumbers.md:25
 type File string
 type CodeBlock []CodeLine
 type BlockName string
 type language string
+
+//// <<< "Codeline type definition" >>>
 
 //line addons/008_MacroNames.md:80
 type CodeLine struct {
@@ -53,6 +59,8 @@ type CodeLine struct {
 	number int
 	macro  BlockName
 }
+
+//// <<< "global block variables" >>>
 
 //line addons/003_LineNumbers.md:30
 
@@ -67,6 +75,7 @@ type codefence struct {
 
 //line addons/005_Flags.md:19
 var flags struct {
+	//// <<< "flags for cli" >>>
 
 //line addons/005_Flags.md:29
 	outfile     string
@@ -80,9 +89,12 @@ var flags struct {
 
 //line addons/008_MacroNames.md:36
 	macro bool
+	//// <<< "global block variables" >>>
 
 //line addons/005_Flags.md:21
 }
+
+//// <<< "global variables" >>>
 
 //line README.md:402
 var namedBlockRe *regexp.Regexp
@@ -93,12 +105,16 @@ var fileBlockRe *regexp.Regexp
 //line README.md:516
 var replaceRe *regexp.Regexp
 
+//// <<< "main code" >>>
+
 //line addons/006_GoGenerate.md:62
 
+//// <<< "ProcessFile Declaration" >>>
 
 //line addons/003_LineNumbers.md:118
 // Updates the blocks and files map for the markdown read from r.
 func ProcessFile(r io.Reader, inputfilename string) error {
+	//// <<< "process file implementation variables" >>>
 
 //line addons/003_LineNumbers.md:82
 	scanner := bufio.NewReader(r)
@@ -114,6 +130,7 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 
 //line addons/004_MarkupExpansion.md:193
 	var fence codefence
+	//// <<< "process file implementation" >>>
 
 //line addons/003_LineNumbers.md:99
 	for {
@@ -127,9 +144,11 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 		default:
 			return err
 		}
+		//// <<< "Handle file line" >>>
 
 //line addons/004_MarkupExpansion.md:210
 		if !inBlock {
+			//// <<< "Check block start" >>>
 
 //line addons/004_MarkupExpansion.md:225
 			if len(line.text) >= 3 && (line.text[0:3] == "```" || line.text[0:3] == "~~~") {
@@ -137,6 +156,7 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 				// We were outside of a block and now we are in one,
 				// so just blindly reset the block variable.
 				block = make(CodeBlock, 0)
+				//// <<< "Check block header" >>>
 
 //line addons/008_MacroNames.md:94
 				fname, bname, appending, line.lang, fence = parseHeader(line.text)
@@ -146,14 +166,17 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 				if bname != "" {
 					line.macro = BlockName(fmt.Sprintf(`"%v"`, bname))
 				}
+				//// <<< "Check block start" >>>
 
 //line addons/004_MarkupExpansion.md:231
 			}
+			//// <<< "Handle file line" >>>
 
 //line addons/004_MarkupExpansion.md:212
 			continue
 		}
 		if l := strings.TrimSpace(line.text); len(l) >= fence.count && strings.Replace(l, fence.char, "", -1) == "" {
+			//// <<< "Handle block ending" >>>
 
 //line addons/003_LineNumbers.md:56
 			inBlock = false
@@ -174,19 +197,25 @@ func ProcessFile(r io.Reader, inputfilename string) error {
 					blocks[bname] = block
 				}
 			}
+			//// <<< "Handle file line" >>>
 
 //line addons/004_MarkupExpansion.md:216
 			continue
 		}
+		//// <<< "Handle block line" >>>
 
 //line addons/003_LineNumbers.md:48
 		block = append(block, line)
+		//// <<< "process file implementation" >>>
 
 //line addons/003_LineNumbers.md:111
 	}
+	//// <<< "ProcessFile Declaration" >>>
 
 //line addons/003_LineNumbers.md:121
 }
+
+//// <<< "ParseHeader Declaration" >>>
 
 //line addons/004_MarkupExpansion.md:129
 func parseHeader(line string) (File, BlockName, bool, language, codefence) {
@@ -206,15 +235,19 @@ func parseHeader(line string) (File, BlockName, bool, language, codefence) {
 	return "", "", false, "", codefence{}
 }
 
+//// <<< "Replace Declaration" >>>
+
 //line addons/001_WhitespacePreservation.md:34
 // Replace expands all macros in a CodeBlock and returns a CodeBlock with no
 // references to macros.
 func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
+	//// <<< "Replace codeblock implementation" >>>
 
 //line addons/003_LineNumbers.md:251
 	var line string
 	for _, v := range c {
 		line = v.text
+		//// <<< "Handle replace line" >>>
 
 //line addons/003_LineNumbers.md:234
 		matches := replaceRe.FindStringSubmatch(line)
@@ -225,6 +258,7 @@ func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
 			ret = append(ret, v)
 			continue
 		}
+		//// <<< "Lookup replacement and add to ret" >>>
 
 //line addons/003_LineNumbers.md:220
 		bname := BlockName(matches[2])
@@ -234,13 +268,17 @@ func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
 			fmt.Fprintf(os.Stderr, "Warning: Block named %s referenced but not defined.\n", bname)
 			ret = append(ret, v)
 		}
+		//// <<< "Replace codeblock implementation" >>>
 
 //line addons/003_LineNumbers.md:255
 	}
 	return
+	//// <<< "Replace Declaration" >>>
 
 //line addons/001_WhitespacePreservation.md:38
 }
+
+//// <<< "Finalize Declaration" >>>
 
 //line addons/008_MacroNames.md:12
 
@@ -255,9 +293,11 @@ func (block CodeBlock) Finalize() (ret string) {
 
 	for _, current := range block {
 		if !flags.publishable && (prev.number+1 != current.number || prev.file != current.file) {
+			//// <<< "Finalize format" >>>
 
 //line addons/008_MacroNames.md:48
 			switch current.lang {
+			//// <<< "Finalize format languages" >>>
 
 //line addons/008_MacroNames.md:62
 			case "bash", "shell", "sh", "zsh", "python", "perl":
@@ -272,6 +312,7 @@ func (block CodeBlock) Finalize() (ret string) {
 			case "C", "c":
 				// No surefire way to make line comments in c, we might be in a comment block already.
 				lineformatstring = "\n#line %v \"%v\"\n"
+				//// <<< "Finalize format" >>>
 
 //line addons/008_MacroNames.md:50
 			}
@@ -281,6 +322,7 @@ func (block CodeBlock) Finalize() (ret string) {
 			if lineformatstring != "" {
 				ret += fmt.Sprintf(lineformatstring, current.number, current.file)
 			}
+			//// <<< "Finalize Declaration" >>>
 
 //line addons/008_MacroNames.md:25
 		}
@@ -289,6 +331,8 @@ func (block CodeBlock) Finalize() (ret string) {
 	}
 	return
 }
+
+//// <<< "Extract named matches from regexps" >>>
 
 //line addons/004_MarkupExpansion.md:155
 
@@ -313,6 +357,8 @@ func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]strin
 	return
 }
 
+//// <<< "Extract a codeblock by a name" >>>
+
 //line addons/007_Extract.md:84
 
 // getBlockByName takes a string as a name and use it as a key in files and
@@ -329,26 +375,34 @@ func getBlockByName(bn string) (CodeBlock, error) {
 	return nil, errors.New("No CodeBlock by that name")
 }
 
+//// <<< "main code" >>>
+
 //line addons/006_GoGenerate.md:64
 
 func main() {
+	//// <<< "main implementation" >>>
 
 //line addons/007_Extract.md:31
 
+	//// <<< "Initialize" >>>
 
 //line README.md:157
 	// Initialize the maps
 	blocks = make(map[BlockName]CodeBlock)
 	files = make(map[File]CodeBlock)
+	//// <<< "Namedblock Regex" >>>
 
 //line addons/004_MarkupExpansion.md:104
 	namedBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w*)\\s*\"(?P<name>.+)\"\\s*(?P<append>[+][=])?$")
+	//// <<< "Fileblock Regex" >>>
 
 //line addons/004_MarkupExpansion.md:113
 	fileBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w+)\\s+(?P<file>[\\w\\.\\-\\/]+)\\s*(?P<append>[+][=])?$")
+	//// <<< "Replace Regex" >>>
 
 //line addons/004_MarkupExpansion.md:83
 	replaceRe = regexp.MustCompile(`^(?P<prefix>\s*)(?:<<|//)<(?P<name>.+)>>>\s*$`)
+	//// <<< "Initialize" >>>
 
 //line addons/005_Flags.md:38
 	flag.Usage = func() {
@@ -366,11 +420,13 @@ func main() {
 
 //line addons/008_MacroNames.md:39
 	flag.BoolVar(&flags.macro, "m", false, "macro names added in comments")
+	//// <<< "main implementation" >>>
 
 //line addons/007_Extract.md:33
 	flag.Parse()
 
 	for _, file := range flag.Args() {
+		//// <<< "Open and process file" >>>
 
 //line addons/003_LineNumbers.md:127
 		f, err := os.Open(file)
@@ -385,9 +441,11 @@ func main() {
 		// Don't defer since we're in a loop, we don't want to wait until the function
 		// exits.
 		f.Close()
+		//// <<< "main implementation" >>>
 
 //line addons/007_Extract.md:37
 	}
+	//// <<< "Override filelist" >>>
 
 //line addons/005_Flags.md:73
 	if flags.outfile != "" {
@@ -399,9 +457,11 @@ func main() {
 		}
 		files = f
 	}
+	//// <<< "main implementation" >>>
 
 //line addons/007_Extract.md:39
 	switch {
+	//// <<< "Implement flags to list files" >>>
 
 //line addons/007_Extract.md:124
 	case flags.listfiles:
@@ -411,6 +471,7 @@ func main() {
 		}
 		sort.Strings(fn)
 		fmt.Println(strings.Join(fn, "\n"))
+		//// <<< "Implement flags to list codeblocks" >>>
 
 //line addons/007_Extract.md:114
 	case flags.listblocks:
@@ -420,6 +481,7 @@ func main() {
 		}
 		sort.Strings(bn)
 		fmt.Println(strings.Join(bn, "\n"))
+		//// <<< "Check flags to print content to standard out" >>>
 
 //line addons/007_Extract.md:61
 	case flags.concatenate != "", flags.extract != "":
@@ -438,9 +500,11 @@ func main() {
 				}
 			}
 		}
+		//// <<< "main implementation" >>>
 
 //line addons/007_Extract.md:41
 	default:
+		//// <<< "Output files" >>>
 
 //line addons/003_LineNumbers.md:318
 		for filename, codeblock := range files {
@@ -459,9 +523,11 @@ func main() {
 			// We don't defer this so that it'll get closed before the loop finishes.
 			f.Close()
 		}
+		//// <<< "main implementation" >>>
 
 //line addons/007_Extract.md:43
 	}
+	//// <<< "main code" >>>
 
 //line addons/006_GoGenerate.md:67
 }

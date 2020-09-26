@@ -575,3 +575,4 @@ lmt README.md WhitespacePreservation.md SubdirectoryFiles.md LineNumbers.md
  5. [Cli Flags](addons/005_Flags.md)
  6. [Go Generate](addons/006_GoGenerate.md)
  7. [Extract Blocks](addons/007_Extract.md)
+ 8. [Macro Nams](addons/008_MacroNames.md)
