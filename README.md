@@ -573,3 +573,4 @@ lmt README.md WhitespacePreservation.md SubdirectoryFiles.md LineNumbers.md
  3. [Line Numbers](addons/003_LineNumbers.md)
  4. [Expansion of Markup](addons/004_MarkupExpansion.md)
  5. [Cli Flags](addons/005_Flags.md)
+ 6. [Go Generate](addons/006_GoGenerate.md)
