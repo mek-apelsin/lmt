@@ -1,5 +1,5 @@
 // Code generated with lmt DO NOT EDIT.
-//go:generate sh -c "go run main.go -p -o $GOFILE README.md addons/*.md"
+//go:generate sh -c "go run main.go -p -o $GOFILE README.md addons/*.md && go fmt $GOFILE && echo please use main.go to produce a binary."
 // This file is without line directives and is primarily for reading.
 // When building and executable, please use main.go as it leaves information
 // about the literate programming sources if you ever experience a crash,
@@ -8,16 +8,16 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"io"
 	"bufio"
-	"regexp"
-	"strings"
-	"path/filepath"
-	"flag"
-	"sort"
 	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
 )
 
 type File string
@@ -33,10 +33,12 @@ type CodeLine struct {
 
 var blocks map[BlockName]CodeBlock
 var files map[File]CodeBlock
+
 type codefence struct {
 	char  string // This should probably be a rune for purity
 	count int
 }
+
 var flags struct {
 	outfile     string
 	publishable bool
@@ -123,6 +125,7 @@ func parseHeader(line string) (File, BlockName, bool, language, codefence) {
 	// An empty return value for unnamed or broken fences to codeblocks.
 	return "", "", false, "", codefence{}
 }
+
 // Replace expands all macros in a CodeBlock and returns a CodeBlock with no
 // references to macros.
 func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
@@ -160,11 +163,11 @@ func (block CodeBlock) Finalize() (ret string) {
 		if !flags.publishable && (prev.number+1 != current.number || prev.file != current.file) {
 			switch current.lang {
 			case "bash", "shell", "sh", "perl":
-				formatstring = "#line %v \"%v\"\n"
+				formatstring = "\n#line %v \"%v\"\n"
 			case "go", "golang":
-				formatstring = "//line %[2]v:%[1]v\n"
+				formatstring = "\n//line %[2]v:%[1]v\n"
 			case "C", "c":
-				formatstring = "#line %v \"%v\"\n"
+				formatstring = "\n#line %v \"%v\"\n"
 			}
 			if formatstring != "" {
 				ret += fmt.Sprintf(formatstring, current.number, current.file)
@@ -219,6 +222,10 @@ func main() {
 	namedBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w*)\\s*\"(?P<name>.+)\"\\s*(?P<append>[+][=])?$")
 	fileBlockRe = regexp.MustCompile("^(?P<fence>`{3,}|~{3,})\\s?(?P<language>\\w+)\\s+(?P<file>[\\w\\.\\-\\/]+)\\s*(?P<append>[+][=])?$")
 	replaceRe = regexp.MustCompile(`^(?P<prefix>\s*)(?:<<|//)<(?P<name>.+)>>>\s*$`)
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] files...\n", os.Args[0])
+		flag.PrintDefaults()
+	}
 	flag.StringVar(&flags.outfile, "o", "", "output a specific file instead of all files.")
 	flag.BoolVar(&flags.publishable, "p", false, "publishable output, without line directives.")
 	flag.StringVar(&flags.concatenate, "c", "", "Concatenate a codeblock and print to standard out.")

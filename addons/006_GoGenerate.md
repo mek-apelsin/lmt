@@ -2,8 +2,7 @@
 
 Go provides the ability to generate code with `go generate`. By providing
 directives within a specifik go-file we are able to describe how it is built
-from our literate code, a very useful feature, especially for litarate
-programming.
+from our code, a very useful feature, especially for litarate programming.
 
 A go generate stanza is `^//go:generate COMMAND$` and every file which has been
 generated should have a line matching the predifined regex below.
@@ -36,10 +35,12 @@ produce a "helpful" message to the user.
 ```
 
 Our implementation for lmt.go only differ in the addition of the `-p` flag.
+Which prettyprints the result and without linestancas and other comments used
+by Go in debug outputs.
 
 ```go lmt.go
 // Code generated with lmt DO NOT EDIT.
-//go:generate sh -c "go run main.go -p -o $GOFILE README.md addons/*.md"
+//go:generate sh -c "go run main.go -p -o $GOFILE README.md addons/*.md && go fmt $GOFILE && echo please use main.go to produce a binary."
 // This file is without line directives and is primarily for reading.
 // When building and executable, please use main.go as it leaves information
 // about the literate programming sources if you ever experience a crash,

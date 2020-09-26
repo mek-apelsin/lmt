@@ -304,11 +304,11 @@ should be simpler to add more later on.
 
 ```go "Format strings for languages"
 case "bash", "shell", "sh", "perl":
-	formatstring = "#line %v \"%v\"\n"
+	formatstring = "\n#line %v \"%v\"\n"
 case "go", "golang":
-	formatstring = "//line %[2]v:%[1]v\n"
+	formatstring = "\n//line %[2]v:%[1]v\n"
 case "C", "c":
-	formatstring = "#line %v \"%v\"\n"
+	formatstring = "\n#line %v \"%v\"\n"
 ```
 
 And finally, lets use our Finalize on the Replace-d codeblock, right before we

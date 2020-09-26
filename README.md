@@ -147,8 +147,8 @@ just used.
 
 ```go "main.go imports"
 "fmt"
-"os"
 "io"
+"os"
 ```
 
 Initializing the maps is pretty straight forward:

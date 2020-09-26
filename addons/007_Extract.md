@@ -134,6 +134,6 @@ We've added sort as a new dependency, for listing code and files and errors
 when writing getBlockByName.
 
 ```go "main.go imports" +=
-"sort"
 "errors"
+"sort"
 ```

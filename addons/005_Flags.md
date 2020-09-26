@@ -35,6 +35,10 @@ default value and a helpful comment. Lets put it last in the initalize section
 in main.
 
 ```go "Initialize" +=
+flag.Usage = func() {
+	fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [options] files...\n", os.Args[0])
+	flag.PrintDefaults()
+}
 flag.StringVar(&flags.outfile, "o", "", "output a specific file instead of all files.")
 flag.BoolVar(&flags.publishable, "p", false, "publishable output, without line directives.")
 ```
