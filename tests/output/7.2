@@ -1,0 +1,281 @@
+
+//line ../../README.md:65
+package main
+
+import (
+
+//line ../../README.md:149
+	"fmt"
+	"io"
+	"os"
+
+//line ../../README.md:212
+	"bufio"
+
+//line ../../README.md:385
+	"regexp"
+
+//line ../../README.md:510
+	"strings"
+
+//line ../../addons/002_SubdirectoryFiles.md:35
+	"path/filepath"
+
+//line ../../README.md:69
+)
+
+
+//line ../../README.md:111
+type File string
+type CodeBlock string
+type BlockName string
+
+var blocks map[BlockName]CodeBlock
+var files map[File]CodeBlock
+
+//line ../../README.md:402
+var namedBlockRe *regexp.Regexp
+
+//line ../../README.md:432
+var fileBlockRe *regexp.Regexp
+
+//line ../../README.md:516
+var replaceRe *regexp.Regexp
+
+//line ../../README.md:72
+
+
+//line ../../README.md:126
+// Updates the blocks and files map for the markdown read from r.
+func ProcessFile(r io.Reader) error {
+
+//line ../../README.md:224
+	scanner := bufio.NewReader(r)
+	var err error
+	var line string
+
+	var inBlock, appending bool
+	var bname BlockName
+	var fname File
+	var block CodeBlock
+
+	for {
+		line, err = scanner.ReadString('\n')
+		switch err {
+			case io.EOF:
+				return nil
+			case nil:
+				// Nothing special
+			default:
+				return err
+		}
+
+//line ../../README.md:253
+		if inBlock {
+			if line == "```\n" {
+
+//line ../../README.md:273
+				// Update the files map if it's a file.
+				if fname != "" {
+					if appending {
+						files[fname] += block
+					} else {
+						files[fname] = block
+					}
+				}
+
+				// Update the named block map if it's a named block.
+				if bname != "" {
+					if appending {
+						blocks[bname] += block
+					} else {
+						blocks[bname] = block
+					}
+				}
+
+
+//line ../../README.md:295
+				inBlock = false
+				appending = false
+				bname = ""
+				fname = ""
+				block = ""
+
+//line ../../README.md:256
+				continue
+			} else {
+
+//line ../../README.md:269
+				block += CodeBlock(line)
+
+//line ../../README.md:259
+			}
+		} else {
+
+//line ../../README.md:311
+			if line == "" {
+				continue
+			}
+
+			switch line[0] {
+			case '`':
+
+//line ../../README.md:331
+				if len(line) >= 3 && line[0:3] == "```" {
+					inBlock = true
+
+//line ../../README.md:363
+					fname, bname, appending = parseHeader(line)
+					// We're outside of a block, so just blindly reset it.
+					block = ""
+
+//line ../../README.md:334
+				}
+
+//line ../../README.md:318
+			default:
+
+//line ../../README.md:295
+				inBlock = false
+				appending = false
+				bname = ""
+				fname = ""
+				block = ""
+
+//line ../../README.md:320
+			}
+
+//line ../../README.md:262
+		}
+
+//line ../../README.md:244
+	}
+
+//line ../../README.md:129
+}
+
+//line ../../README.md:375
+func parseHeader(line string) (File, BlockName, bool) {
+	line = strings.TrimSpace(line)
+
+//line ../../README.md:416
+	matches := namedBlockRe.FindStringSubmatch(line)
+	if matches != nil {
+		return "", BlockName(matches[2]), (matches[3] == "+=")
+	}
+
+//line ../../README.md:444
+	matches = fileBlockRe.FindStringSubmatch(line)
+	if matches != nil {
+		return File(matches[2]), "", (matches[3] == "+=")
+	}
+
+//line ../../README.md:421
+	return "", "", false
+
+//line ../../README.md:378
+}
+
+//line ../../addons/001_WhitespacePreservation.md:34
+// Replace expands all macros in a CodeBlock and returns a CodeBlock with no
+// references to macros.
+func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
+
+//line ../../README.md:493
+	scanner := bufio.NewReader(strings.NewReader(string(c)))
+
+	for {
+		line, err := scanner.ReadString('\n')
+		// ReadString will eventually return io.EOF and this will return.
+		if err != nil {
+			return
+		}
+
+//line ../../addons/001_WhitespacePreservation.md:63
+		matches := replaceRe.FindStringSubmatch(line)
+		if matches == nil {
+			if line != "\n" {
+				ret += CodeBlock(prefix)
+			}
+			ret += CodeBlock(line)
+			continue
+		}
+
+//line ../../addons/001_WhitespacePreservation.md:22
+		bname := BlockName(matches[2])
+		if val, ok := blocks[bname]; ok {
+			ret += val.Replace(prefix + matches[1])
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Block named %s referenced but not defined.\n", bname)
+			ret += CodeBlock(line)
+		}
+
+//line ../../README.md:502
+	}
+	return
+
+//line ../../addons/001_WhitespacePreservation.md:38
+}
+
+//line ../../README.md:74
+
+func main() {
+
+//line ../../README.md:157
+	// Initialize the maps
+	blocks = make(map[BlockName]CodeBlock)
+	files = make(map[File]CodeBlock)
+
+//line ../../README.md:410
+	namedBlockRe = regexp.MustCompile("^([`]+\\s?)[\\w]+[\\s]+\"(.+)\"[\\s]*([+][=])?$")
+
+//line ../../README.md:440
+	fileBlockRe = regexp.MustCompile("^([`]+\\s?)[\\w]+[\\s]+([\\w\\.\\-\\/]+)[\\s]*([+][=])?$")
+
+//line ../../addons/001_WhitespacePreservation.md:11
+	replaceRe = regexp.MustCompile(`^([\s]*)<<<(.+)>>>[\s]*$`)
+
+//line ../../README.md:136
+
+	// os.Args[0] is the command name, "lmt". We don't want to process it.
+	for _, file := range os.Args[1:] {
+
+//line ../../README.md:166
+		f, err := os.Open(file)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error: ", err)
+			continue
+		}
+
+		if err := ProcessFile(f); err != nil {
+			fmt.Fprintln(os.Stderr, "error: ", err)
+		}
+		// Don't defer since we're in a loop, we don't want to wait until the function
+		// exits.
+		f.Close()
+
+//line ../../README.md:140
+
+	}
+
+//line ../../addons/002_SubdirectoryFiles.md:15
+	for filename, codeblock := range files {
+		if dir := filepath.Dir(string(filename)); dir != "." {
+			if err := os.MkdirAll(dir, 0775); err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+			}
+		}
+
+		f, err := os.Create(string(filename))
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			continue
+		}
+		fmt.Fprintf(f, "%s", codeblock.Replace(""))
+		// We don't defer this so that it'll get closed before the loop finishes.
+		f.Close() 
+
+	}
+
+//line ../../README.md:77
+}

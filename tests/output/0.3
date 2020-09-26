@@ -1,0 +1,190 @@
+package main
+
+import (
+"fmt"
+"io"
+"os"
+"bufio"
+"regexp"
+"strings"
+"path/filepath"
+)
+
+type File string
+type CodeBlock []CodeLine
+type BlockName string
+type language string
+type CodeLine struct {
+	text   string
+	file   File
+	lang   language
+	number int
+}
+
+var blocks map[BlockName]CodeBlock
+var files map[File]CodeBlock
+var namedBlockRe *regexp.Regexp
+var fileBlockRe *regexp.Regexp
+var replaceRe *regexp.Regexp
+
+// Updates the blocks and files map for the markdown read from r.
+func ProcessFile(r io.Reader, inputfilename string) error {
+scanner := bufio.NewReader(r)
+var err error
+
+var line CodeLine
+line.file = File(inputfilename)
+
+var inBlock, appending bool
+var bname BlockName
+var fname File
+var block CodeBlock
+for {
+	line.number++
+	line.text, err = scanner.ReadString('\n')
+	switch err {
+	case io.EOF:
+		return nil
+	case nil:
+		// Nothing special
+	default:
+		return err
+	}
+if inBlock {
+	if line.text == "```\n" {
+inBlock = false
+// Update the files map if it's a file.
+if fname != "" {
+	if appending {
+		files[fname] = append(files[fname], block...)
+	} else {
+		files[fname] = block
+	}
+}
+
+// Update the named block map if it's a named block.
+if bname != "" {
+	if appending {
+		blocks[bname] = append(blocks[bname], block...)
+	} else {
+		blocks[bname] = block
+	}
+}
+		continue
+	}
+block = append(block, line)
+	continue
+}
+if len(line.text) >= 3 && (line.text[0:3] == "```") {
+	inBlock = true
+	// We were outside of a block, so just blindly reset it.
+	block = make(CodeBlock, 0)
+fname, bname, appending, line.lang = parseHeader(line.text)
+}
+}
+}
+func parseHeader(line string) (File, BlockName, bool, language) {
+	line = strings.TrimSpace(line)
+var matches []string
+if matches = namedBlockRe.FindStringSubmatch(line); matches != nil {
+	return "", BlockName(matches[2]), (matches[3] == "+="), language(matches[1])
+}
+if matches = fileBlockRe.FindStringSubmatch(line); matches != nil {
+	return File(matches[2]), "", (matches[3] == "+="), language(matches[1])
+}
+return "", "", false, ""
+}
+// Replace expands all macros in a CodeBlock and returns a CodeBlock with no
+// references to macros.
+func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
+var line string
+for _, v := range c {
+	line = v.text
+matches := replaceRe.FindStringSubmatch(line)
+if matches == nil {
+	if v.text != "\n" {
+		v.text = prefix + v.text
+	}
+	ret = append(ret, v)
+	continue
+}
+bname := BlockName(matches[2])
+if val, ok := blocks[bname]; ok {
+	ret = append(ret, val.Replace(prefix+matches[1])...)
+} else {
+	fmt.Fprintf(os.Stderr, "Warning: Block named %s referenced but not defined.\n", bname)
+	ret = append(ret, v)
+}
+}
+return
+}
+
+// Finalize reads the textual lines from CodeBlocks and (if needed) prepend a
+// notice about "unexpected" filename or line changes, which is extracted from
+// the contained CodeLines. The result is a string with newlines ready to be
+// pasted into a file.
+func (block CodeBlock) Finalize() (ret string) {
+	var prev CodeLine
+	var formatstring string
+
+	for _, current := range block {
+		if prev.number+1 != current.number || prev.file != current.file {
+			switch current.lang {
+case "bash", "shell", "sh", "perl":
+	formatstring = "\n#line %v \"%v\"\n"
+case "go", "golang":
+	formatstring = "\n//line %[2]v:%[1]v\n"
+case "C", "c":
+	formatstring = "\n#line %v \"%v\"\n"
+			}
+			if formatstring != "" {
+				ret += fmt.Sprintf(formatstring, current.number, current.file)
+			}
+		}
+		ret += current.text
+		prev = current
+	}
+	return
+}
+
+func main() {
+// Initialize the maps
+blocks = make(map[BlockName]CodeBlock)
+files = make(map[File]CodeBlock)
+namedBlockRe = regexp.MustCompile("^`{3,}\\s?(\\w*)\\s*\"(.+)\"\\s*([+][=])?$")
+fileBlockRe = regexp.MustCompile("^`{3,}\\s?(\\w+)\\s+([\\w\\.\\-\\/]+)\\s*([+][=])?$")
+replaceRe = regexp.MustCompile(`^([\s]*)<<<(.+)>>>[\s]*$`)
+
+// os.Args[0] is the command name, "lmt". We don't want to process it.
+for _, file := range os.Args[1:] {
+f, err := os.Open(file)
+if err != nil {
+	fmt.Fprintln(os.Stderr, "error: ", err)
+	continue
+}
+
+if err := ProcessFile(f, file); err != nil {
+	fmt.Fprintln(os.Stderr, "error: ", err)
+}
+// Don't defer since we're in a loop, we don't want to wait until the function
+// exits.
+f.Close()
+
+}
+for filename, codeblock := range files {
+	if dir := filepath.Dir(string(filename)); dir != "." {
+		if err := os.MkdirAll(dir, 0775); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+	}
+
+	f, err := os.Create(string(filename))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		continue
+	}
+	fmt.Fprintf(f, "%s", codeblock.Replace("").Finalize())
+	// We don't defer this so that it'll get closed before the loop finishes.
+	f.Close()
+}
+}

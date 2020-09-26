@@ -1,0 +1,191 @@
+package main
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"bufio"
+	"regexp"
+	"strings"
+	"path/filepath"
+	"flag"
+)
+
+type File string
+type CodeBlock []CodeLine
+type BlockName string
+type language string
+type CodeLine struct {
+	text   string
+	file   File
+	lang   language
+	number int
+}
+
+var blocks map[BlockName]CodeBlock
+var files map[File]CodeBlock
+type codefence struct {
+	char  string // This should probably be a rune for purity
+	count int
+}
+var flags struct {
+//<flags for cli>>>
+}
+var namedBlockRe *regexp.Regexp
+var fileBlockRe *regexp.Regexp
+var replaceRe *regexp.Regexp
+
+// Updates the blocks and files map for the markdown read from r.
+func ProcessFile(r io.Reader, inputfilename string) error {
+	scanner := bufio.NewReader(r)
+	var err error
+
+	var line CodeLine
+	line.file = File(inputfilename)
+
+	var inBlock, appending bool
+	var bname BlockName
+	var fname File
+	var block CodeBlock
+	var fence codefence
+	for {
+		line.number++
+		line.text, err = scanner.ReadString('\n')
+		switch err {
+		case io.EOF:
+			return nil
+		case nil:
+			// Nothing special
+		default:
+			return err
+		}
+		if !inBlock {
+			if len(line.text) >= 3 && (line.text[0:3] == "```" || line.text[0:3] == "~~~") {
+				inBlock = true
+				// We were outside of a block and now we are in one,
+				// so just blindly reset the block variable.
+				block = make(CodeBlock, 0)
+				fname, bname, appending, line.lang, fence = parseHeader(line.text)
+			}
+			continue
+		}
+		if l := strings.TrimSpace(line.text); len(l) >= fence.count && strings.Replace(l, fence.char, "", -1) == "" {
+			inBlock = false
+			// Update the files map if it's a file.
+			if fname != "" {
+				if appending {
+					files[fname] = append(files[fname], block...)
+				} else {
+					files[fname] = block
+				}
+			}
+
+			// Update the named block map if it's a named block.
+			if bname != "" {
+				if appending {
+					blocks[bname] = append(blocks[bname], block...)
+				} else {
+					blocks[bname] = block
+				}
+			}
+			continue
+		}
+		block = append(block, line)
+	}
+}
+func parseHeader(line string) (File, BlockName, bool, language, codefence) {
+	line = strings.TrimSpace(line) // remove indentation and trailing spaces
+
+	// lets iterate over the regexps we have.
+	for _, re := range []*regexp.Regexp{namedBlockRe, fileBlockRe} {
+		if m := namedMatchesfromRe(re, line); m != nil {
+			var fence codefence
+			fence.char = m["fence"][0:1]
+			fence.count = len(m["fence"])
+			return File(m["file"]), BlockName(m["name"]), (m["append"] == "+="), language(m["language"]), fence
+		}
+	}
+
+	// An empty return value for unnamed or broken fences to codeblocks.
+	return "", "", false, "", codefence{}
+}
+// Replace expands all macros in a CodeBlock and returns a CodeBlock with no
+// references to macros.
+func (c CodeBlock) Replace(prefix string) (ret CodeBlock) {
+	var line string
+	for _, v := range c {
+		line = v.text
+		matches := replaceRe.FindStringSubmatch(line)
+		if matches == nil {
+			if v.text != "\n" {
+				v.text = prefix + v.text
+			}
+			ret = append(ret, v)
+			continue
+		}
+		bname := BlockName(matches[2])
+		if val, ok := blocks[bname]; ok {
+			ret = append(ret, val.Replace(prefix+matches[1])...)
+		} else {
+			fmt.Fprintf(os.Stderr, "Warning: Block named %s referenced but not defined.\n", bname)
+			ret = append(ret, v)
+		}
+	}
+	return
+}
+
+// Finalize reads the textual lines from CodeBlocks and (if needed) prepend a
+// notice about "unexpected" filename or line changes, which is extracted from
+// the contained CodeLines. The result is a string with newlines ready to be
+// pasted into a file.
+func (block CodeBlock) Finalize() (ret string) {
+	var prev CodeLine
+	var formatstring string
+
+	for _, current := range block {
+		if !flags.publishable && (prev.number+1 != current.number || prev.file != current.file) {
+			switch current.lang {
+			//<Format strings for languages>>>
+			}
+			if formatstring != "" {
+				ret += fmt.Sprintf(formatstring, current.number, current.file)
+			}
+		}
+		ret += current.text
+		prev = current
+	}
+	return
+}
+
+// namedMatchesfromRe takes an regexp and a string to match and returns a map
+// of named groups to the matches. If not matches are found it returns nil.
+func namedMatchesfromRe(re *regexp.Regexp, toMatch string) (ret map[string]string) {
+	substrings := re.FindStringSubmatch(toMatch)
+	if substrings == nil {
+		return nil
+	}
+
+	ret = make(map[string]string)
+	names := re.SubexpNames()
+
+	for i, s := range substrings {
+		ret[names[i]] = s
+	}
+	// The names[0] and names[x] from unnamed regex grous are an empty string.
+	// Instead of checking every names[x] we simply overwrite the previous
+	// ret[""] and discard it at the end.
+	delete(ret, "")
+	return
+}
+
+func main() {
+
+	//<Initialize>>>
+	flag.Parse()
+
+	for _, file := range flag.Args() {
+		//<Open and process file>>>
+	}
+	//<Override filelist>>>
+	//<Output files>>>
+}
